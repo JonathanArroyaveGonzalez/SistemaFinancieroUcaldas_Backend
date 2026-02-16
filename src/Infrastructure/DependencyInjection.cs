@@ -3,10 +3,14 @@ using SAPFIAI.Domain.Constants;
 using SAPFIAI.Infrastructure.Data;
 using SAPFIAI.Infrastructure.Data.Interceptors;
 using SAPFIAI.Infrastructure.Identity;
+using SAPFIAI.Infrastructure.Services;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -32,19 +36,47 @@ public static class DependencyInjection
 
         services.AddScoped<ApplicationDbContextInitialiser>();
 
-        services.AddAuthentication()
-            .AddBearerToken(IdentityConstants.BearerScheme);
+        var jwtKey = configuration["Jwt:Key"]
+            ?? throw new InvalidOperationException("JWT Key is not configured. Set the 'Jwt:Key' configuration value.");
+
+        services.AddAuthentication(options =>
+        {
+            options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+            options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+        })
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                ValidateIssuer = true,
+                ValidIssuer = configuration["Jwt:Issuer"] ?? "SAPFIAI",
+                ValidateAudience = true,
+                ValidAudience = configuration["Jwt:Audience"] ?? "SAPFIAI-Users",
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero
+            };
+        });
 
         services.AddAuthorizationBuilder();
 
         services
             .AddIdentityCore<ApplicationUser>()
             .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<ApplicationDbContext>()
-            .AddApiEndpoints();
+            .AddEntityFrameworkStores<ApplicationDbContext>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddTransient<IIdentityService, IdentityService>();
+
+        services.AddMemoryCache();
+
+        // Registrar servicios de email, 2FA y auditoría
+        services.AddHttpClient<IEmailService, BrevoEmailService>();
+        services.AddScoped<ITwoFactorService, TwoFactorService>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
+        services.AddScoped<IAuthenticationOperations, AuthenticationOperations>();
+        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
 
         services.AddAuthorization(options =>
             options.AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator)));

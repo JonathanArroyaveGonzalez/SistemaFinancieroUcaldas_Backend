@@ -43,7 +43,23 @@ public class ApplicationDbContextInitialiser
     {
         try
         {
-            await _context.Database.MigrateAsync();
+            // Check if we can connect and if there are pending migrations
+            var pendingMigrations = await _context.Database.GetPendingMigrationsAsync();
+            
+            if (pendingMigrations.Any())
+            {
+                _logger.LogInformation("Applying {Count} pending migrations...", pendingMigrations.Count());
+                await _context.Database.MigrateAsync();
+            }
+            else
+            {
+                _logger.LogInformation("Database is up to date. No pending migrations.");
+            }
+        }
+        catch (Microsoft.Data.SqlClient.SqlException ex) when (ex.Number == 2714)
+        {
+            // Error 2714: Object already exists in database
+            _logger.LogWarning("Database tables already exist. Skipping migration.");
         }
         catch (Exception ex)
         {
@@ -69,10 +85,41 @@ public class ApplicationDbContextInitialiser
     {
         // Default roles
         var administratorRole = new IdentityRole(Roles.Administrator);
+        var userRole = new IdentityRole("User");
+        var managerRole = new IdentityRole("Manager");
 
         if (_roleManager.Roles.All(r => r.Name != administratorRole.Name))
         {
             await _roleManager.CreateAsync(administratorRole);
+        }
+
+        if (_roleManager.Roles.All(r => r.Name != userRole.Name))
+        {
+            await _roleManager.CreateAsync(userRole);
+        }
+
+        if (_roleManager.Roles.All(r => r.Name != managerRole.Name))
+        {
+            await _roleManager.CreateAsync(managerRole);
+        }
+
+        // Default permissions
+        if (!_context.Permissions.Any())
+        {
+            var permissions = new List<Permission>
+            {
+                new() { Name = "users.read", Description = "Ver usuarios", Module = "Users" },
+                new() { Name = "users.create", Description = "Crear usuarios", Module = "Users" },
+                new() { Name = "users.update", Description = "Actualizar usuarios", Module = "Users" },
+                new() { Name = "users.delete", Description = "Eliminar usuarios", Module = "Users" },
+                new() { Name = "roles.read", Description = "Ver roles", Module = "Roles" },
+                new() { Name = "roles.manage", Description = "Gestionar roles", Module = "Roles" },
+                new() { Name = "audit.read", Description = "Ver auditoría", Module = "Audit" },
+                new() { Name = "system.admin", Description = "Administración del sistema", Module = "System" }
+            };
+
+            _context.Permissions.AddRange(permissions);
+            await _context.SaveChangesAsync();
         }
 
         // Default users
@@ -85,25 +132,6 @@ public class ApplicationDbContextInitialiser
             {
                 await _userManager.AddToRolesAsync(administrator, new [] { administratorRole.Name });
             }
-        }
-
-        // Default data
-        // Seed, if necessary
-        if (!_context.TodoLists.Any())
-        {
-            _context.TodoLists.Add(new TodoList
-            {
-                Title = "Todo List",
-                Items =
-                {
-                    new TodoItem { Title = "Make a todo list 📃" },
-                    new TodoItem { Title = "Check off the first item ✅" },
-                    new TodoItem { Title = "Realise you've already done two things on the list! 🤯"},
-                    new TodoItem { Title = "Reward yourself with a nice, long nap 🏆" },
-                }
-            });
-
-            await _context.SaveChangesAsync();
         }
     }
 }

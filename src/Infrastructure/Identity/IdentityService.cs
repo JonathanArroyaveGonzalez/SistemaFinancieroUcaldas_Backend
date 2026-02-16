@@ -78,4 +78,71 @@ public class IdentityService : IIdentityService
 
         return result.ToApplicationResult();
     }
+
+    public async Task<IList<string>> GetUserRolesAsync(string userId)
+    {
+        var user = _userManager.Users.SingleOrDefault(u => u.Id == userId);
+
+        return user != null ? await _userManager.GetRolesAsync(user) : new List<string>();
+    }
+
+    public async Task<(bool Success, string? Token)> GeneratePasswordResetTokenAsync(string email)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            return (false, null);
+        }
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        return (true, token);
+    }
+
+    public async Task<Result> ResetPasswordAsync(string email, string token, string newPassword)
+    {
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null)
+        {
+            return Result.Failure(new[] { "Usuario no encontrado" });
+        }
+
+        var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
+        return result.ToApplicationResult();
+    }
+
+    public async Task<Result> ChangePasswordAsync(string userId, string currentPassword, string newPassword)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return Result.Failure(new[] { "Usuario no encontrado" });
+        }
+
+        var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        return result.ToApplicationResult();
+    }
+
+    public async Task<Result> AssignRoleAsync(string userId, string role)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return Result.Failure(new[] { "Usuario no encontrado" });
+        }
+
+        var result = await _userManager.AddToRoleAsync(user, role);
+        return result.ToApplicationResult();
+    }
+
+    public async Task<Result> RemoveRoleAsync(string userId, string role)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return Result.Failure(new[] { "Usuario no encontrado" });
+        }
+
+        var result = await _userManager.RemoveFromRoleAsync(user, role);
+        return result.ToApplicationResult();
+    }
 }

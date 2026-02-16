@@ -4,9 +4,11 @@ namespace SAPFIAI.Application.Common.Interfaces;
 
 public interface IApplicationDbContext
 {
-    DbSet<TodoList> TodoLists { get; }
+    DbSet<AuditLog> AuditLogs { get; }
 
-    DbSet<TodoItem> TodoItems { get; }
+    DbSet<Permission> Permissions { get; }
+
+    DbSet<RolePermission> RolePermissions { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

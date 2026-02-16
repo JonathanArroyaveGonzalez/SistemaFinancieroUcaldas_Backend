@@ -13,4 +13,16 @@ public interface IIdentityService
     Task<(Result Result, string UserId)> CreateUserAsync(string userName, string password);
 
     Task<Result> DeleteUserAsync(string userId);
+
+    Task<IList<string>> GetUserRolesAsync(string userId);
+
+    Task<(bool Success, string? Token)> GeneratePasswordResetTokenAsync(string email);
+
+    Task<Result> ResetPasswordAsync(string email, string token, string newPassword);
+
+    Task<Result> ChangePasswordAsync(string userId, string currentPassword, string newPassword);
+
+    Task<Result> AssignRoleAsync(string userId, string role);
+
+    Task<Result> RemoveRoleAsync(string userId, string role);
 }
