@@ -40,6 +40,8 @@ jobs:
           -p:PublishProfile=Site4now-WebDeploy `
           -p:Password="${{ secrets.SMARTERASP_PASSWORD }}" `
           -p:DeleteExistingFiles=True
+        
+        Write-Host "? Deployment completed. App pool will restart automatically." -ForegroundColor Green
           
     - name: Deployment Summary
       if: success()
