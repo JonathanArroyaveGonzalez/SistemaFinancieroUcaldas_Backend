@@ -191,7 +191,7 @@ publish/
 *.azurePubxml
 # Note: Comment the next line if you want to checkin your web deploy settings,
 # but database connection strings (with potential passwords) will be unencrypted
-*.pubxml
+# *.pubxml - Comentado para permitir perfiles de publicación en CI/CD
 *.publishproj
 
 # Microsoft Azure Web App publish settings. Comment the next line if you want to
@@ -487,6 +487,7 @@ ehthumbs_vista.db
 *.stackdump
 DEPLOYMENT.md
 docs.md
+/docs
 
 # Folder config file
 [Dd]esktop.ini
