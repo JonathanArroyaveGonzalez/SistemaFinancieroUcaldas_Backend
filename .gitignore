@@ -3,6 +3,10 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+# Secrets / local environment
+.env
+.env.*
+
 # User-specific files
 *.rsuser
 *.suo
@@ -482,6 +486,7 @@ ehthumbs_vista.db
 # Dump file
 *.stackdump
 DEPLOYMENT.md
+docs.md
 
 # Folder config file
 [Dd]esktop.ini
