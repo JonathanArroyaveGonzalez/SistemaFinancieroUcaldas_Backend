@@ -10,5 +10,11 @@ public interface IApplicationDbContext
 
     DbSet<RolePermission> RolePermissions { get; }
 
+    DbSet<RefreshToken> RefreshTokens { get; }
+
+    DbSet<IpBlackList> IpBlackLists { get; }
+
+    DbSet<LoginAttempt> LoginAttempts { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
