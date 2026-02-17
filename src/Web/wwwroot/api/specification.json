@@ -1,10 +1,10 @@
 {
-"x-generator": "NSwag v14.0.0.0 (NJsonSchema v11.0.0.0 (Newtonsoft.Json v13.0.0.0))",
-"openapi": "3.0.0",
-"info": {
-  "title": "SAPFIAI API",
-  "version": "2.0.0"
-},
+  "x-generator": "NSwag v14.0.0.0 (NJsonSchema v11.0.0.0 (Newtonsoft.Json v13.0.0.0))",
+  "openapi": "3.0.0",
+  "info": {
+    "title": "SAPFIAI API",
+    "version": "1.0.0"
+  },
   "paths": {
     "/api/Authentication/register": {
       "post": {
@@ -176,12 +176,106 @@
         }
       }
     },
-    "/api/Authentication/enable-2fa": {
+    "/api/Authentication/refresh-token": {
       "post": {
         "tags": [
           "Authentication"
         ],
         "operationId": "Authentication6",
+        "requestBody": {
+          "x-name": "command",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenCommand"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Authentication/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "Authentication7",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ]
+      }
+    },
+    "/api/Authentication/revoke-token": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "Authentication8",
+        "requestBody": {
+          "x-name": "command",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeTokenCommand"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ]
+      }
+    },
+    "/api/Authentication/enable-2fa": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "operationId": "Authentication9",
         "requestBody": {
           "x-name": "command",
           "content": {
@@ -330,6 +424,156 @@
           }
         ]
       }
+    },
+    "/api/Security/blocked-ips": {
+      "get": {
+        "tags": [
+          "Security"
+        ],
+        "operationId": "SecurityAll",
+        "parameters": [
+          {
+            "name": "activeOnly",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": true
+            },
+            "x-position": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IpBlackList"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ]
+      }
+    },
+    "/api/Security/block-ip": {
+      "post": {
+        "tags": [
+          "Security"
+        ],
+        "operationId": "Security",
+        "requestBody": {
+          "x-name": "command",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BlockIpCommand"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ]
+      }
+    },
+    "/api/Security/unblock-ip": {
+      "post": {
+        "tags": [
+          "Security"
+        ],
+        "operationId": "Security2",
+        "requestBody": {
+          "x-name": "command",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnblockIpCommand"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ]
+      }
+    },
+    "/api/Security/unlock-account": {
+      "post": {
+        "tags": [
+          "Security"
+        ],
+        "operationId": "Security3",
+        "requestBody": {
+          "x-name": "command",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlockAccountCommand"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Result"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -390,6 +634,15 @@
           },
           "token": {
             "type": "string",
+            "nullable": true
+          },
+          "refreshToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "refreshTokenExpiry": {
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           },
           "user": {
@@ -547,6 +800,27 @@
           }
         }
       },
+      "RefreshTokenCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          }
+        }
+      },
+      "RevokeTokenCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "refreshToken": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
       "EnableTwoFactorCommand": {
         "type": "object",
         "additionalProperties": false,
@@ -613,6 +887,128 @@
           "resourceType": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "IpBlackList": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BaseEntity"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "ipAddress": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "blockedDate": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "expiryDate": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "blockedBy": {
+                "type": "string",
+                "nullable": true
+              },
+              "isActive": {
+                "type": "boolean"
+              },
+              "notes": {
+                "type": "string",
+                "nullable": true
+              },
+              "blackListReason": {
+                "$ref": "#/components/schemas/BlackListReason"
+              }
+            }
+          }
+        ]
+      },
+      "BlackListReason": {
+        "type": "integer",
+        "description": "",
+        "x-enumNames": [
+          "ManualBlock",
+          "TooManyAttempts",
+          "SuspiciousActivity",
+          "ReportedAbuse"
+        ],
+        "enum": [
+          0,
+          1,
+          2,
+          3
+        ]
+      },
+      "BaseEntity": {
+        "type": "object",
+        "x-abstract": true,
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "domainEvents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BaseEvent"
+            }
+          }
+        }
+      },
+      "BaseEvent": {
+        "type": "object",
+        "x-abstract": true,
+        "additionalProperties": false
+      },
+      "BlockIpCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ipAddress": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "blackListReason": {
+            "$ref": "#/components/schemas/BlackListReason"
+          },
+          "expiryDate": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UnblockIpCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ipAddress": {
+            "type": "string"
+          }
+        }
+      },
+      "UnlockAccountCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "userId": {
+            "type": "string"
           }
         }
       }
