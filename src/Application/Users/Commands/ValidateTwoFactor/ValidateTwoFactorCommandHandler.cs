@@ -11,19 +11,22 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
     private readonly IAuditLogService _auditLogService;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IIdentityService _identityService;
+    private readonly IRefreshTokenService _refreshTokenService;
 
     public ValidateTwoFactorCommandHandler(
         IAuthenticationOperations authOperations,
         ITwoFactorService twoFactorService,
         IAuditLogService auditLogService,
         IJwtTokenGenerator jwtTokenGenerator,
-        IIdentityService identityService)
+        IIdentityService identityService,
+        IRefreshTokenService refreshTokenService)
     {
         _authOperations = authOperations;
         _twoFactorService = twoFactorService;
         _auditLogService = auditLogService;
         _jwtTokenGenerator = jwtTokenGenerator;
         _identityService = identityService;
+        _refreshTokenService = refreshTokenService;
     }
 
     public async Task<ValidateTwoFactorResponse> Handle(ValidateTwoFactorCommand request, CancellationToken cancellationToken)
@@ -108,6 +111,7 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
         // Generar nuevo JWT sin flag de 2FA pendiente
         var userRoles = await _identityService.GetUserRolesAsync(userId);
         var newToken = _jwtTokenGenerator.GenerateToken(userId, user.Email ?? string.Empty, userRoles, requiresTwoFactorVerification: false);
+        var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, request.IpAddress ?? "UNKNOWN");
 
         // Actualizar datos de login
         await _authOperations.UpdateLastLoginAsync(userId, request.IpAddress);
@@ -124,6 +128,8 @@ public class ValidateTwoFactorCommandHandler : IRequestHandler<ValidateTwoFactor
         {
             Success = true,
             Token = newToken,
+            RefreshToken = refreshToken.Token,
+            RefreshTokenExpiry = refreshToken.ExpiryDate,
             User = user,
             Message = "Verificación exitosa"
         };
