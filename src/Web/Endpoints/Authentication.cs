@@ -3,8 +3,11 @@ using SAPFIAI.Application.Common.Models;
 using SAPFIAI.Application.Users.Commands.EnableTwoFactor;
 using SAPFIAI.Application.Users.Commands.ForgotPassword;
 using SAPFIAI.Application.Users.Commands.Login;
+using SAPFIAI.Application.Users.Commands.Logout;
+using SAPFIAI.Application.Users.Commands.RefreshToken;
 using SAPFIAI.Application.Users.Commands.Register;
 using SAPFIAI.Application.Users.Commands.ResetPassword;
+using SAPFIAI.Application.Users.Commands.RevokeToken;
 using SAPFIAI.Application.Users.Commands.ValidateTwoFactor;
 using SAPFIAI.Application.Users.Queries;
 using MediatR;
@@ -53,7 +56,25 @@ public class Authentication : EndpointGroupBase
             .Produces<Result>(StatusCodes.Status200OK)
             .AllowAnonymous();
 
+        group.MapPost("/refresh-token", RefreshToken)
+            .WithName("RefreshToken")
+            .WithOpenApi()
+            .Produces<LoginResponse>(StatusCodes.Status200OK)
+            .AllowAnonymous();
+
         // Endpoints protegidos (requieren autenticación)
+        group.MapPost("/logout", Logout)
+            .WithName("Logout")
+            .WithOpenApi()
+            .Produces<Result>(StatusCodes.Status200OK)
+            .RequireAuthorization();
+
+        group.MapPost("/revoke-token", RevokeToken)
+            .WithName("RevokeToken")
+            .WithOpenApi()
+            .Produces<Result>(StatusCodes.Status200OK)
+            .RequireAuthorization();
+
         group.MapPost("/enable-2fa", EnableTwoFactor)
             .WithName("EnableTwoFactor")
             .WithOpenApi()
@@ -132,6 +153,49 @@ public class Authentication : EndpointGroupBase
 
     private static async Task<Result> ResetPassword(
         [FromBody] ResetPasswordCommand command,
+        IMediator mediator,
+        HttpContext httpContext)
+    {
+        command = command with
+        {
+            IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = httpContext.Request.Headers.UserAgent.ToString()
+        };
+
+        return await mediator.Send(command);
+    }
+
+    private static async Task<LoginResponse> RefreshToken(
+        [FromBody] RefreshTokenCommand command,
+        IMediator mediator,
+        HttpContext httpContext)
+    {
+        command = command with
+        {
+            IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = httpContext.Request.Headers.UserAgent.ToString()
+        };
+
+        return await mediator.Send(command);
+    }
+
+    private static async Task<Result> Logout(
+        IMediator mediator,
+        IUser user,
+        HttpContext httpContext)
+    {
+        var command = new LogoutCommand
+        {
+            UserId = user.Id ?? string.Empty,
+            IpAddress = httpContext.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = httpContext.Request.Headers.UserAgent.ToString()
+        };
+
+        return await mediator.Send(command);
+    }
+
+    private static async Task<Result> RevokeToken(
+        [FromBody] RevokeTokenCommand command,
         IMediator mediator,
         HttpContext httpContext)
     {
