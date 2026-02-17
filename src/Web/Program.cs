@@ -1,4 +1,5 @@
 using SAPFIAI.Infrastructure.Data;
+using SAPFIAI.Web.Middleware;
 
 // Load environment variables from .env file BEFORE building configuration
 // Try multiple locations for .env file
@@ -66,6 +67,9 @@ else
 app.UseHealthChecks("/health");
 app.UseHttpsRedirection();
 app.UseStaticFiles();
+
+// Middleware de seguridad - debe estar ANTES de Authentication
+app.UseMiddleware<IpBlockingMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
