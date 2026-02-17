@@ -24,4 +24,14 @@ public class ApplicationUser : IdentityUser
     /// Relación con logs de auditoría
     /// </summary>
     public ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
+
+    /// <summary>
+    /// Número de intentos fallidos de login
+    /// </summary>
+    public int FailedLoginAttempts { get; set; } = 0;
+
+    /// <summary>
+    /// Fecha del último intento fallido
+    /// </summary>
+    public DateTime? LastFailedLoginAttempt { get; set; }
 }

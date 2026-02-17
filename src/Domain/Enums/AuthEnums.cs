@@ -62,3 +62,27 @@ public enum UserStatus
     PendingVerification,
     Suspended
 }
+
+/// <summary>
+/// Razones de bloqueo de IP
+/// </summary>
+public enum BlackListReason
+{
+    ManualBlock,
+    TooManyAttempts,
+    SuspiciousActivity,
+    ReportedAbuse
+}
+
+/// <summary>
+/// Razones de fallo de login
+/// </summary>
+public enum LoginFailureReason
+{
+    InvalidCredentials,
+    AccountLocked,
+    IpBlocked,
+    TwoFactorRequired,
+    AccountNotVerified
+}
+
