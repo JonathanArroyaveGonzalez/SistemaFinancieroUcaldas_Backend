@@ -1,661 +1,776 @@
-﻿# 🔐 Sistema de Autenticación SAPFIAI
+# ?? Sistema de Autenticaci�n y Seguridad SAPFIAI
 
-## 📋 Tabla de Contenidos
-- [Arquitectura General](#arquitectura-general)
-- [Endpoints de Autenticación](#endpoints-de-autenticación)
-- [Flujo de Autenticación](#flujo-de-autenticación)
-- [Entidades de Base de Datos](#entidades-de-base-de-datos)
-- [Servicios Implementados](#servicios-implementados)
-- [Variables de Entorno](#variables-de-entorno)
-- [Configuración de Email (Brevo)](#configuración-de-email-brevo)
-- [Ejemplos de Uso](#ejemplos-de-uso)
+## ?? Tabla de Contenidos
+
+1. [Arquitectura General](#-arquitectura-general)
+2. [Diagrama de Entidad-Relaci�n](#-diagrama-de-entidad-relaci�n)
+3. [Endpoints de Autenticaci�n](#-endpoints-de-autenticaci�n)
+4. [Endpoints de Seguridad (Admin)](#-endpoints-de-seguridad-admin)
+5. [Flujo Completo de Login](#-flujo-completo-de-login)
+6. [Flujo de Refresh Token](#-flujo-de-refresh-token)
+7. [Protecci�n Anti Fuerza Bruta](#-protecci�n-anti-fuerza-bruta)
+8. [Entidades de Base de Datos](#-entidades-de-base-de-datos)
+9. [Servicios Implementados](#-servicios-implementados)
+10. [Configuraci�n](#-configuraci�n)
+11. [Ejemplos de Uso con cURL](#-ejemplos-de-uso-con-curl)
 
 ---
 
-## 🏗️ Arquitectura General
+## ??? Arquitectura General
 
-El sistema sigue la arquitectura **Clean Architecture** con las siguientes capas:
+El sistema sigue la arquitectura **Clean Architecture** con patr�n **CQRS** usando **MediatR**:
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Web (API)                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  Endpoints/Controllers                               │    │
-│  │  - Authentication.cs                                 │    │
-│  │  - Users.cs                                          │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Application                             │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  Commands & Queries (CQRS con MediatR)              │    │
-│  │  - LoginCommand                                      │    │
-│  │  - RegisterCommand                                   │    │
-│  │  - ValidateTwoFactorCommand                         │    │
-│  │  - RefreshTokenCommand                              │    │
-│  │  - ForgotPasswordCommand                            │    │
-│  │  - ResetPasswordCommand                             │    │
-│  └─────────────────────────────────────────────────────┘    │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  Interfaces                                          │    │
-│  │  - IIdentityService                                  │    │
-│  │  - IJwtTokenGenerator                               │    │
-│  │  - ITwoFactorService                                │    │
-│  │  - IEmailService                                    │    │
-│  │  - IAuditLogService                                 │    │
-│  │  - IRefreshTokenService                             │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Infrastructure                           │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  Services                                            │    │
-│  │  - IdentityService                                   │    │
-│  │  - JwtTokenGenerator                                │    │
-│  │  - TwoFactorService                                 │    │
-│  │  - BrevoEmailService                                │    │
-│  │  - AuditLogService                                  │    │
-│  │  - RefreshTokenService                              │    │
-│  │  - AuthenticationOperations                         │    │
-│  └─────────────────────────────────────────────────────┘    │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  Data (Entity Framework Core)                       │    │
-│  │  - ApplicationDbContext                             │    │
-│  │  - Migrations                                        │    │
-│  │  - Configurations                                    │    │
-│  └─────────────────────────────────────────────────────┘    │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  Identity (ASP.NET Core Identity)                   │    │
-│  │  - ApplicationUser                                   │    │
-│  │  - UserManager                                       │    │
-│  │  - RoleManager                                       │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        Domain                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │  Entities                                            │    │
-│  │  - AuditLog                                          │    │
-│  │  - RefreshToken                                      │    │
-│  │  - Permission                                        │    │
-│  │  - RolePermission                                    │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Capa de Presentaci�n"
+        A[Web API - Endpoints]
+        B[Middleware IpBlocking]
+    end
+    
+    subgraph "Capa de Aplicaci�n"
+        C[Commands/Queries]
+        D[Handlers]
+        E[Interfaces]
+    end
+    
+    subgraph "Capa de Dominio"
+        F[Entidades]
+        G[Enums]
+    end
+    
+    subgraph "Capa de Infraestructura"
+        H[Servicios]
+        I[EF Core DbContext]
+        J[Identity]
+        K[Background Jobs]
+    end
+    
+    subgraph "Base de Datos"
+        L[(SQL Server)]
+    end
+    
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> H
+    H --> I
+    H --> J
+    I --> L
+    K --> H
+    F --> I
+    G --> F
 ```
 
 ---
 
-## 🌐 Endpoints de Autenticación
+## ?? Diagrama de Entidad-Relaci�n
+
+```mermaid
+erDiagram
+    AspNetUsers ||--o{ RefreshTokens : "tiene"
+    AspNetUsers ||--o{ AuditLogs : "genera"
+    AspNetUsers ||--o{ LoginAttempts : "realiza"
+    AspNetUsers }o--o{ AspNetRoles : "pertenece"
+    AspNetRoles ||--o{ RolePermissions : "tiene"
+    RolePermissions }o--|| Permissions : "referencia"
+    
+    AspNetUsers {
+        string Id PK
+        string UserName
+        string Email
+        string PasswordHash
+        bool IsTwoFactorEnabled
+        datetime LastLoginDate
+        string LastLoginIp
+        int FailedLoginAttempts
+        datetime LastFailedLoginAttempt
+        datetime LockoutEnd
+        bool LockoutEnabled
+    }
+    
+    RefreshTokens {
+        int Id PK
+        string Token UK
+        string UserId FK
+        datetime ExpiryDate
+        datetime CreatedDate
+        bool IsRevoked
+        datetime RevokedDate
+        string ReplacedByToken
+        string CreatedByIp
+        string RevokedByIp
+        string ReasonRevoked
+    }
+    
+    IpBlackLists {
+        int Id PK
+        string IpAddress
+        string Reason
+        datetime BlockedDate
+        datetime ExpiryDate
+        string BlockedBy
+        string Notes
+        int BlackListReason
+    }
+    
+    LoginAttempts {
+        int Id PK
+        string Email
+        string IpAddress
+        datetime AttemptDate
+        bool WasSuccessful
+        string FailureReason
+        int FailureReasonType
+        string UserAgent
+    }
+    
+    AuditLogs {
+        int Id PK
+        string UserId FK
+        string Action
+        datetime Timestamp
+        string IpAddress
+        string UserAgent
+        string Details
+        string Status
+    }
+    
+    Permissions {
+        int Id PK
+        string Name
+        string Description
+        int Module
+    }
+    
+    RolePermissions {
+        int Id PK
+        string RoleId FK
+        int PermissionId FK
+    }
+    
+    AspNetRoles {
+        string Id PK
+        string Name
+    }
+```
+
+---
+
+## ?? Endpoints de Autenticaci�n
 
 ### Base URL: `/api/Authentication`
 
-| Método | Endpoint | Descripción | Autenticación |
-|--------|----------|-------------|---------------|
-| `POST` | `/register` | Registro de nuevo usuario | ❌ Público |
-| `POST` | `/login` | Inicio de sesión (genera código 2FA) | ❌ Público |
-| `POST` | `/verify-2fa` | Verificar código 2FA | ❌ Público |
-| `POST` | `/refresh-token` | Renovar token de acceso | ❌ Público |
-| `POST` | `/forgot-password` | Solicitar reset de contraseña | ❌ Público |
-| `POST` | `/reset-password` | Restablecer contraseña | ❌ Público |
-| `POST` | `/revoke-token` | Revocar refresh token | ✅ Requerida |
-| `POST` | `/enable-2fa` | Habilitar 2FA | ✅ Requerida |
-| `GET` | `/audit-logs` | Ver logs de auditoría | ✅ Admin |
-| `GET` | `/audit-logs/user/{userId}` | Ver logs de usuario | ✅ Requerida |
+| M�todo | Endpoint | Descripci�n | Auth Requerida |
+|--------|----------|-------------|----------------|
+| `POST` | `/register` | Registro de nuevo usuario | ? No |
+| `POST` | `/login` | Inicio de sesi�n | ? No |
+| `POST` | `/verify-2fa` | Verificar c�digo 2FA | ? No |
+| `POST` | `/refresh-token` | Renovar access token | ? No |
+| `POST` | `/logout` | Cerrar sesi�n (revoca refresh tokens) | ? S� |
+| `POST` | `/revoke-token` | Revocar refresh token espec�fico | ? S� |
+| `POST` | `/forgot-password` | Solicitar reset de contrase�a | ? No |
+| `POST` | `/reset-password` | Restablecer contrase�a | ? No |
+| `POST` | `/enable-2fa` | Habilitar autenticaci�n 2FA | ? S� |
+| `GET` | `/audit-logs` | Obtener logs de auditor�a (admin) | ? Admin |
+| `GET` | `/audit-logs/user/{userId}` | Logs de un usuario espec�fico | ? S� |
 
 ---
 
-## 🔄 Flujo de Autenticación
+## ?? Endpoints de Seguridad (Admin)
 
-### 1️⃣ Registro de Usuario
+### Base URL: `/api/Security`
 
-```mermaid
-sequenceDiagram
-    participant C as Cliente
-    participant API as API
-    participant IS as IdentityService
-    participant ES as EmailService
-    participant DB as Database
+| M�todo | Endpoint | Descripci�n | Auth Requerida |
+|--------|----------|-------------|----------------|
+| `GET` | `/blocked-ips` | Listar IPs bloqueadas | ? Admin |
+| `POST` | `/block-ip` | Bloquear una IP manualmente | ? Admin |
+| `POST` | `/unblock-ip` | Desbloquear una IP | ? Admin |
+| `POST` | `/unlock-account` | Desbloquear cuenta de usuario | ? Admin |
 
-    C->>API: POST /register {email, password, userName}
-    API->>IS: CreateUserAsync()
-    IS->>DB: Crear usuario en AspNetUsers
-    IS->>IS: Asignar rol "User"
-    API->>ES: SendRegistrationConfirmationAsync()
-    ES-->>C: Email de bienvenida
-    API->>DB: Guardar AuditLog (REGISTER_SUCCESS)
-    API-->>C: {success: true, userId, message}
-```
+---
 
-### 2️⃣ Login con 2FA
+## ?? Flujo Completo de Login
 
 ```mermaid
 sequenceDiagram
     participant C as Cliente
-    participant API as API
-    participant AO as AuthOperations
+    participant MW as IpBlockingMiddleware
+    participant API as LoginHandler
+    participant IPBL as IpBlackListService
+    participant LA as LoginAttemptService
+    participant AL as AccountLockService
+    participant AUTH as AuthOperations
     participant 2FA as TwoFactorService
-    participant ES as EmailService
-    participant JWT as JwtGenerator
-    participant DB as Database
-
-    C->>API: POST /login {email, password}
-    API->>AO: VerifyCredentialsAsync()
-    AO->>DB: Verificar contraseña
-    AO-->>API: {isValid, userId, email}
-    
-    API->>JWT: GenerateToken(requires2FA: true)
-    JWT-->>API: Token temporal
-    
-    API->>2FA: GenerateAndSendTwoFactorCodeAsync()
-    2FA->>DB: Guardar código en AspNetUsers
-    2FA->>ES: SendTwoFactorCodeAsync()
-    ES-->>C: Email con código 2FA
-    
-    API->>DB: Guardar AuditLog (LOGIN_PENDING_2FA)
-    API-->>C: {token: "temporal", message: "Código enviado"}
-```
-
-### 3️⃣ Verificación 2FA
-
-```mermaid
-sequenceDiagram
-    participant C as Cliente
-    participant API as API
-    participant JWT as JwtGenerator
-    participant 2FA as TwoFactorService
+    participant JWT as JwtTokenGenerator
     participant RT as RefreshTokenService
+    participant AUDIT as AuditLogService
     participant DB as Database
 
-    C->>API: POST /verify-2fa {code, token}
-    API->>JWT: ValidateToken(token)
-    JWT-->>API: {userId, email}
+    C->>MW: POST /login {email, password, ipAddress}
     
-    API->>2FA: ValidateTwoFactorCodeAsync(userId, code)
-    2FA->>DB: Verificar código y expiración
+    Note over MW,IPBL: 1. Verificar IP no bloqueada
+    MW->>IPBL: IsIpBlockedAsync(ipAddress)
+    IPBL->>DB: SELECT FROM IpBlackLists
+    IPBL-->>MW: false
+    MW->>API: Continuar
+    
+    Note over API,LA: 2. Rate Limiting por IP
+    API->>LA: GetRecentAttemptsByIpAsync(ip, 15min)
+    LA->>DB: COUNT LoginAttempts
+    LA-->>API: 3 intentos
+    
+    Note over API,AUTH: 3. Verificar credenciales
+    API->>AUTH: VerifyCredentialsAsync(email, password)
+    AUTH->>DB: Verificar hash de contrase�a
+    AUTH-->>API: {isValid: true, userId, email}
+    
+    Note over API,AL: 4. Verificar cuenta no bloqueada
+    API->>AL: GetAccountLockStatusAsync(userId)
+    AL->>DB: SELECT LockoutEnd FROM AspNetUsers
+    AL-->>API: {isLocked: false}
+    
+    Note over API,2FA: 5. Verificar si tiene 2FA
+    API->>2FA: IsTwoFactorEnabledAsync(userId)
+    2FA->>DB: SELECT IsTwoFactorEnabled
     2FA-->>API: true
     
-    API->>2FA: ClearTwoFactorCodeAsync()
-    2FA->>DB: Limpiar código del usuario
+    Note over API,JWT: 6. Generar token temporal
+    API->>JWT: GenerateToken(userId, requires2FA: true)
+    JWT-->>API: tempToken
     
-    API->>JWT: GenerateToken(requires2FA: false)
-    JWT-->>API: Token final
+    Note over API,2FA: 7. Enviar c�digo 2FA
+    API->>2FA: GenerateAndSendTwoFactorCodeAsync(userId)
+    2FA->>DB: UPDATE TwoFactorCode
+    2FA->>Email: SendTwoFactorCodeAsync(email, code)
+    2FA-->>API: true
     
-    API->>RT: GenerateRefreshTokenAsync()
-    RT->>DB: Guardar RefreshToken
+    Note over API,LA: 8. Registrar intento exitoso
+    API->>LA: RecordAttemptAsync(email, ip, true)
+    LA->>DB: INSERT INTO LoginAttempts
+    
+    Note over API,AUDIT: 9. Auditar acci�n
+    API->>AUDIT: LogActionAsync("LOGIN_PENDING_2FA")
+    AUDIT->>DB: INSERT INTO AuditLogs
+    
+    API-->>C: {success: true, token: tempToken, requires2FA: true}
+    
+    Note over C,API: Usuario ingresa c�digo 2FA
+    C->>API: POST /verify-2fa {code, token}
+    
+    Note over API,2FA: 10. Validar c�digo 2FA
+    API->>2FA: ValidateTwoFactorCodeAsync(userId, code)
+    2FA->>DB: SELECT TwoFactorCode, Expiration
+    2FA-->>API: true
+    
+    Note over API,JWT: 11. Generar token final
+    API->>JWT: GenerateToken(userId, requires2FA: false)
+    JWT-->>API: finalToken
+    
+    Note over API,RT: 12. Generar Refresh Token
+    API->>RT: GenerateRefreshTokenAsync(userId, ip)
+    RT->>DB: INSERT INTO RefreshTokens
     RT-->>API: refreshToken
     
-    API->>DB: Guardar AuditLog (LOGIN_SUCCESS)
-    API-->>C: {token: "final", refreshToken, user}
-```
-
-### 4️⃣ Refresh Token
-
-```mermaid
-sequenceDiagram
-    participant C as Cliente
-    participant API as API
-    participant RT as RefreshTokenService
-    participant JWT as JwtGenerator
-    participant DB as Database
-
-    C->>API: POST /refresh-token {refreshToken}
-    API->>RT: ValidateRefreshTokenAsync()
-    RT->>DB: Buscar token válido
-    RT-->>API: {userId, isValid}
+    Note over API,AL: 13. Resetear contadores
+    API->>AL: ResetFailedAttemptsAsync(userId)
+    AL->>DB: UPDATE FailedLoginAttempts = 0
     
-    API->>RT: RevokeAndRotateAsync()
-    RT->>DB: Revocar token actual
-    RT->>DB: Crear nuevo RefreshToken
+    Note over API,AUDIT: 14. Auditar login exitoso
+    API->>AUDIT: LogActionAsync("LOGIN_SUCCESS")
+    AUDIT->>DB: INSERT INTO AuditLogs
     
-    API->>JWT: GenerateToken()
-    JWT-->>API: Nuevo access token
-    
-    API-->>C: {token, refreshToken}
+    API-->>C: {success: true, token: finalToken, refreshToken, user}
 ```
 
 ---
 
-## 🗃️ Entidades de Base de Datos
+## ?? Flujo de Refresh Token
 
-### Diagrama ER
+```mermaid
+sequenceDiagram
+    participant C as Cliente
+    participant MW as IpBlockingMiddleware
+    participant API as RefreshTokenHandler
+    participant IPBL as IpBlackListService
+    participant RT as RefreshTokenService
+    participant JWT as JwtTokenGenerator
+    participant DB as Database
 
-```
-┌─────────────────────┐       ┌─────────────────────┐
-│    AspNetUsers      │       │    AspNetRoles      │
-├─────────────────────┤       ├─────────────────────┤
-│ Id (PK)             │       │ Id (PK)             │
-│ UserName            │       │ Name                │
-│ Email               │◄──────│ NormalizedName      │
-│ PasswordHash        │       │ ConcurrencyStamp    │
-│ IsTwoFactorEnabled  │       └─────────────────────┘
-│ TwoFactorCode       │                │
-│ TwoFactorCodeExp    │                │
-│ LastLoginDate       │       ┌────────┴────────┐
-│ LastLoginIp         │       │ AspNetUserRoles │
-└─────────────────────┘       ├─────────────────┤
-         │                    │ UserId (FK)     │
-         │                    │ RoleId (FK)     │
-         │                    └─────────────────┘
-         │
-         ▼
-┌─────────────────────┐       ┌─────────────────────┐
-│    AuditLogs        │       │   RefreshTokens     │
-├─────────────────────┤       ├─────────────────────┤
-│ Id (PK)             │       │ Id (PK)             │
-│ UserId              │       │ UserId              │
-│ Action              │       │ Token               │
-│ IpAddress           │       │ ExpiresAt           │
-│ UserAgent           │       │ CreatedAt           │
-│ Timestamp           │       │ RevokedAt           │
-│ Details             │       │ IsRevoked           │
-│ Status              │       │ ReplacedByToken     │
-│ ErrorMessage        │       │ CreatedByIp         │
-│ ResourceId          │       │ RevokedByIp         │
-│ ResourceType        │       └─────────────────────┘
-└─────────────────────┘
-
-┌─────────────────────┐       ┌─────────────────────┐
-│    Permissions      │       │  RolePermissions    │
-├─────────────────────┤       ├─────────────────────┤
-│ Id (PK)             │◄──────│ Id (PK)             │
-│ Name                │       │ RoleId              │
-│ Description         │       │ PermissionId (FK)   │
-│ Module              │       │ AssignedAt          │
-│ IsActive            │       │ AssignedBy          │
-│ CreatedAt           │       └─────────────────────┘
-└─────────────────────┘
+    C->>MW: POST /refresh-token {refreshToken, ipAddress}
+    
+    Note over MW,IPBL: 1. Verificar IP
+    MW->>IPBL: IsIpBlockedAsync(ipAddress)
+    IPBL-->>MW: false
+    MW->>API: Continuar
+    
+    Note over API,RT: 2. Validar Refresh Token
+    API->>RT: ValidateRefreshTokenAsync(token, ip)
+    RT->>DB: SELECT * FROM RefreshTokens WHERE Token = @token
+    RT->>DB: Verificar: !IsRevoked AND ExpiryDate > NOW()
+    RT-->>API: {isValid: true, userId, email}
+    
+    Note over API,JWT: 3. Generar nuevo Access Token
+    API->>JWT: GenerateToken(userId, email, roles)
+    JWT-->>API: newAccessToken
+    
+    Note over API,RT: 4. Rotar Refresh Token
+    API->>RT: GenerateRefreshTokenAsync(userId, ip)
+    RT->>DB: INSERT INTO RefreshTokens (nuevo)
+    RT-->>API: newRefreshToken
+    
+    Note over API,RT: 5. Revocar token anterior
+    API->>RT: RevokeRefreshTokenAsync(oldToken, ip)
+    RT->>DB: UPDATE RefreshTokens SET IsRevoked = 1, ReplacedByToken = @newToken
+    
+    API-->>C: {token: newAccessToken, refreshToken: newRefreshToken}
 ```
 
-### ApplicationUser (Extendido de IdentityUser)
+---
+
+## ??? Protecci�n Anti Fuerza Bruta
+
+### M�ltiples Capas de Seguridad
+
+```mermaid
+graph TD
+    A[Intento de Login] --> B{IP Bloqueada?}
+    B -->|S�| C[HTTP 403 - Acceso Denegado]
+    B -->|No| D{Rate Limit IP?}
+    D -->|>5 intentos en 15min| E[Rechazar - Demasiados intentos]
+    D -->|OK| F{Verificar Credenciales}
+    F -->|Inv�lidas| G[Incrementar Contador]
+    F -->|V�lidas| H{Cuenta Bloqueada?}
+    G --> I{>10 intentos en 1h?}
+    I -->|S�| J[Bloquear IP 24h]
+    I -->|No| K{>5 intentos fallidos?}
+    K -->|S�| L[Bloquear cuenta 15min]
+    K -->|No| E
+    H -->|S�| M[Rechazar - Cuenta bloqueada]
+    H -->|No| N[Login Exitoso]
+    N --> O[Resetear Contadores]
+    O --> P[Generar Tokens]
+```
+
+### Configuraci�n de Seguridad
+
+```json
+{
+  "Security": {
+    "RefreshToken": {
+      "ExpirationDays": 7,
+      "MaxActiveTokensPerUser": 5
+    },
+    "RateLimiting": {
+      "MaxAttemptsPerIp": 5,
+      "WindowMinutes": 15,
+      "IpBlockDurationMinutes": 60
+    },
+    "AccountLock": {
+      "MaxFailedAttempts": 5,
+      "LockoutMinutes": 15,
+      "ResetFailedAttemptsAfterMinutes": 60
+    },
+    "BlackList": {
+      "EnableAutoBlock": true,
+      "AutoBlockAfterAttempts": 10,
+      "AutoBlockDurationHours": 24
+    }
+  }
+}
+```
+
+---
+
+## ??? Entidades de Base de Datos
+
+### RefreshToken
+
+| Campo | Tipo | Descripci�n |
+|-------|------|-------------|
+| `Id` | int | PK, Identity |
+| `Token` | string(500) | Token �nico (base64) |
+| `UserId` | string(450) | FK a AspNetUsers |
+| `ExpiryDate` | datetime | Fecha de expiraci�n |
+| `CreatedDate` | datetime | Fecha de creaci�n |
+| `IsRevoked` | bool | Si fue revocado |
+| `RevokedDate` | datetime? | Cu�ndo fue revocado |
+| `ReplacedByToken` | string(500)? | Token que lo reemplaz� |
+| `CreatedByIp` | string(45)? | IP de creaci�n |
+| `RevokedByIp` | string(45)? | IP de revocaci�n |
+| `ReasonRevoked` | string(500)? | Raz�n de revocaci�n |
+
+### IpBlackList
+
+| Campo | Tipo | Descripci�n |
+|-------|------|-------------|
+| `Id` | int | PK, Identity |
+| `IpAddress` | string(45) | Direcci�n IP |
+| `Reason` | string(500) | Raz�n del bloqueo |
+| `BlockedDate` | datetime | Cu�ndo se bloque� |
+| `ExpiryDate` | datetime? | Cu�ndo expira (null = permanente) |
+| `BlockedBy` | string(450)? | Qui�n bloque� |
+| `Notes` | string(1000)? | Notas adicionales |
+| `BlackListReason` | enum | ManualBlock, TooManyAttempts, SuspiciousActivity, ReportedAbuse |
+
+### LoginAttempt
+
+| Campo | Tipo | Descripci�n |
+|-------|------|-------------|
+| `Id` | int | PK, Identity |
+| `Email` | string(256) | Email del intento |
+| `IpAddress` | string(45) | IP del intento |
+| `AttemptDate` | datetime | Cu�ndo ocurri� |
+| `WasSuccessful` | bool | Si fue exitoso |
+| `FailureReason` | string(500)? | Raz�n del fallo |
+| `FailureReasonType` | enum? | InvalidCredentials, AccountLocked, IpBlocked, etc. |
+| `UserAgent` | string(500)? | User agent del navegador |
+
+### ApplicationUser (extends IdentityUser)
 
 ```csharp
 public class ApplicationUser : IdentityUser
 {
-    // Campos adicionales para 2FA
     public bool IsTwoFactorEnabled { get; set; }
-    public string? TwoFactorCode { get; set; }
-    public DateTime? TwoFactorCodeExpiration { get; set; }
-    
-    // Información de último login
     public DateTime? LastLoginDate { get; set; }
     public string? LastLoginIp { get; set; }
+    public int FailedLoginAttempts { get; set; }
+    public DateTime? LastFailedLoginAttempt { get; set; }
     
     // Relaciones
-    public virtual ICollection<AuditLog> AuditLogs { get; set; }
+    public ICollection<AuditLog> AuditLogs { get; set; }
 }
 ```
 
 ---
 
-## 🛠️ Servicios Implementados
+## ?? Servicios Implementados
 
-### 1. JwtTokenGenerator
-Genera y valida tokens JWT.
-
-```csharp
-public interface IJwtTokenGenerator
-{
-    string GenerateToken(string userId, string email, IList<string> roles, bool requiresTwoFactorVerification = false);
-    string GenerateRefreshToken();
-    (bool IsValid, string? UserId, string? Email) ValidateToken(string token);
-}
-```
-
-### 2. TwoFactorService
-Maneja la generación y validación de códigos 2FA.
+### 1. IRefreshTokenService
 
 ```csharp
-public interface ITwoFactorService
-{
-    Task<bool> GenerateAndSendTwoFactorCodeAsync(string userId);
-    Task<bool> ValidateTwoFactorCodeAsync(string userId, string code);
-    Task ClearTwoFactorCodeAsync(string userId);
-    Task<bool> IsTwoFactorEnabledAsync(string userId);
-}
+Task<RefreshToken> GenerateRefreshTokenAsync(string userId, string ipAddress);
+Task<(bool isValid, string? userId, string? email)> ValidateRefreshTokenAsync(string token, string ipAddress);
+Task<bool> RevokeRefreshTokenAsync(string token, string ipAddress, string reason);
+Task<int> RevokeAllUserTokensAsync(string userId, string ipAddress, string reason);
+Task<IEnumerable<RefreshToken>> GetActiveTokensByUserAsync(string userId);
+Task<int> CleanupExpiredTokensAsync();
 ```
 
-### 3. RefreshTokenService
-Gestiona los refresh tokens.
+### 2. IIpBlackListService
 
 ```csharp
-public interface IRefreshTokenService
-{
-    Task<string> GenerateRefreshTokenAsync(string userId, string? ipAddress = null);
-    Task<(bool IsValid, string? UserId)> ValidateRefreshTokenAsync(string token);
-    Task<bool> RevokeRefreshTokenAsync(string token, string? ipAddress = null);
-    Task<string?> RotateRefreshTokenAsync(string oldToken, string? ipAddress = null);
-    Task RevokeAllUserTokensAsync(string userId, string? ipAddress = null);
-}
+Task<bool> IsIpBlockedAsync(string ipAddress);
+Task<IpBlackList> BlockIpAsync(string ipAddress, string reason, BlackListReason type, string? blockedBy, DateTime? expiryDate, string? notes);
+Task<bool> UnblockIpAsync(string ipAddress, string unblockedBy);
+Task<IEnumerable<IpBlackList>> GetBlockedIpsAsync(bool activeOnly = true);
+Task<int> CleanupExpiredBlocksAsync();
+Task<IpBlackList?> GetBlockInfoAsync(string ipAddress);
 ```
 
-### 4. AuditLogService
-Registra todas las acciones del sistema.
+### 3. ILoginAttemptService
 
 ```csharp
-public interface IAuditLogService
-{
-    Task LogActionAsync(string userId, string action, string? ipAddress = null, 
-        string? userAgent = null, string? details = null, string status = "SUCCESS", 
-        string? errorMessage = null, string? resourceId = null, string? resourceType = null);
-    Task<List<AuditLogDto>> GetUserAuditLogsAsync(string userId, int skip = 0, int take = 50);
-    Task<List<AuditLogDto>> GetAuditLogsAsync(string? action = null, int skip = 0, int take = 50);
-}
+Task RecordAttemptAsync(string email, string ipAddress, bool wasSuccessful, string? failureReason, LoginFailureReason? type, string? userAgent);
+Task<int> GetRecentAttemptsByIpAsync(string ipAddress, int minutes = 15);
+Task<int> GetFailedAttemptsByEmailAsync(string email, int minutes = 60);
+Task<bool> ShouldBlockIpAsync(string ipAddress);
+Task<bool> ShouldLockAccountAsync(string email);
+Task<int> CleanupOldAttemptsAsync(int daysToKeep = 30);
 ```
 
-### 5. BrevoEmailService
-Envía emails usando la API de Brevo (Sendinblue).
+### 4. IAccountLockService
 
 ```csharp
-public interface IEmailService
-{
-    Task<bool> SendTwoFactorCodeAsync(string email, string code, string userName);
-    Task<bool> SendLoginConfirmationAsync(string email, string userName, string ipAddress, DateTime loginDate);
-    Task<bool> SendSecurityAlertAsync(string email, string userName, string action, string ipAddress);
-    Task<bool> SendRegistrationConfirmationAsync(string email, string userName);
-    Task<bool> SendPasswordResetAsync(string email, string userName, string resetToken);
-}
+Task<bool> LockAccountAsync(string userId, int lockoutMinutes = 15);
+Task<bool> UnlockAccountAsync(string userId);
+Task<bool> IsAccountLockedAsync(string userId);
+Task<int> IncrementFailedAttemptsAsync(string userId);
+Task ResetFailedAttemptsAsync(string userId);
+Task<(bool isLocked, DateTime? lockoutEnd, int failedAttempts)> GetAccountLockStatusAsync(string userId);
 ```
+
+### 5. Background Job: SecurityCleanupJob
+
+Ejecuta cada 1 hora:
+- Limpia refresh tokens expirados
+- Limpia bloqueos de IP expirados  
+- Limpia intentos de login > 30 d�as
 
 ---
 
-## 🔧 Variables de Entorno
+## ?? Configuraci�n
 
-Crear archivo `.env` en la raíz del proyecto:
+### appsettings.json
 
-```env
-# =============================================================================
-# DATABASE
-# =============================================================================
-CONNECTIONSTRINGS__DEFAULTCONNECTION=Server=tu-servidor;Database=tu-db;User Id=usuario;Password=password;
-
-# =============================================================================
-# BREVO (SENDINBLUE) EMAIL SERVICE
-# =============================================================================
-API_KEY_BREVO=tu-api-key-de-brevo
-BREVO_SENDER_EMAIL=tu-email-verificado@dominio.com
-BREVO_SENDER_NAME=NombreApp
-
-# =============================================================================
-# TWO-FACTOR AUTHENTICATION
-# =============================================================================
-TWO_FACTOR_EXPIRATION_MINUTES=10
-
-# =============================================================================
-# JWT CONFIGURATION
-# =============================================================================
-JWT__KEY=TuClaveSecretaDeAlMenos32CaracteresParaJWT
-JWT__ISSUER=NombreApp
-JWT__AUDIENCE=NombreApp-Users
-JWT__EXPIREMINUTES=60
-JWT__REFRESHTOKENEXPIRATIONDAYS=7
-
-# =============================================================================
-# APPLICATION
-# =============================================================================
-APP__BASEURL=https://tu-dominio.com
-ASPNETCORE_ENVIRONMENT=Development
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=...;Database=SAPFIAIDb;..."
+  },
+  "Jwt": {
+    "Key": "TU_CLAVE_SECRETA_MUY_LARGA_Y_SEGURA",
+    "Issuer": "SAPFIAI",
+    "Audience": "SAPFIAI-Users",
+    "ExpireMinutes": "15"
+  },
+  "Security": {
+    "RefreshToken": {
+      "ExpirationDays": 7,
+      "MaxActiveTokensPerUser": 5
+    },
+    "RateLimiting": {
+      "MaxAttemptsPerIp": 5,
+      "WindowMinutes": 15
+    },
+    "AccountLock": {
+      "MaxFailedAttempts": 5,
+      "LockoutMinutes": 15
+    },
+    "BlackList": {
+      "EnableAutoBlock": true,
+      "AutoBlockAfterAttempts": 10,
+      "AutoBlockDurationHours": 24
+    }
+  },
+  "Brevo": {
+    "ApiKey": "TU_API_KEY_DE_BREVO",
+    "SenderEmail": "noreply@tudominio.com",
+    "SenderName": "SAPFIAI"
+  }
+}
 ```
 
----
-
-## 📧 Configuración de Email (Brevo)
-
-### Pasos para configurar Brevo:
-
-1. **Crear cuenta** en [https://app.brevo.com](https://app.brevo.com)
-
-2. **Obtener API Key:**
-   - Ir a Configuración → Claves API
-   - Crear nueva clave
-   - Copiar la clave generada
-
-3. **Verificar email remitente:**
-   - Ir a Configuración → Remitentes
-   - Añadir el email que usarás como remitente
-   - Verificar haciendo clic en el enlace del email recibido
-
-4. **Configurar variables de entorno:**
-   ```env
-   API_KEY_BREVO=xkeysib-xxxxx
-   BREVO_SENDER_EMAIL=tu-email-verificado@gmail.com
-   BREVO_SENDER_NAME=SAPFIAI
-   ```
-
----
-
-## 📝 Ejemplos de Uso
-
-### 1. Registro
+### Variables de Entorno (.env)
 
 ```bash
-curl -X POST 'https://localhost:5001/api/Authentication/register' \
-  -H 'Content-Type: application/json' \
+# Base de datos
+ConnectionStrings__DefaultConnection="Server=...;Database=SAPFIAIDb;..."
+
+# JWT
+Jwt__Key="TU_CLAVE_SECRETA_MUY_LARGA_Y_SEGURA"
+Jwt__Issuer="SAPFIAI"
+Jwt__Audience="SAPFIAI-Users"
+Jwt__ExpireMinutes="15"
+
+# Brevo Email
+Brevo__ApiKey="xkeysib-..."
+Brevo__SenderEmail="noreply@tudominio.com"
+Brevo__SenderName="SAPFIAI"
+
+# Seguridad
+Security__RefreshToken__ExpirationDays="7"
+Security__RateLimiting__MaxAttemptsPerIp="5"
+Security__AccountLock__MaxFailedAttempts="5"
+```
+
+---
+
+## ?? Ejemplos de Uso con cURL
+
+### 1. Registro de Usuario
+
+```bash
+curl -X POST https://localhost:5001/api/Authentication/register \
+  -H "Content-Type: application/json" \
   -d '{
-    "email": "usuario@ejemplo.com",
-    "password": "MiPassword123!",
-    "userName": "usuario"
+    "userName": "juan.perez",
+    "email": "juan.perez@example.com",
+    "password": "Pass123!@#",
+    "confirmPassword": "Pass123!@#"
   }'
 ```
 
-**Respuesta:**
+**Respuesta exitosa:**
 ```json
 {
   "success": true,
-  "userId": "b4489164-7071-4446-9765-e1ac185a361d",
+  "userId": "abc123...",
   "message": "Usuario registrado exitosamente"
 }
 ```
 
-### 2. Login
+### 2. Login (con 2FA habilitado)
 
 ```bash
-curl -X POST 'https://localhost:5001/api/Authentication/login' \
-  -H 'Content-Type: application/json' \
+curl -X POST https://localhost:5001/api/Authentication/login \
+  -H "Content-Type: application/json" \
   -d '{
-    "email": "usuario@ejemplo.com",
-    "password": "MiPassword123!"
+    "email": "juan.perez@example.com",
+    "password": "Pass123!@#"
   }'
 ```
 
-**Respuesta:**
+**Respuesta (requiere 2FA):**
 ```json
 {
   "success": true,
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "b4489164-7071-4446-9765-e1ac185a361d",
-    "email": "usuario@ejemplo.com",
-    "userName": "usuario"
-  },
-  "message": "Código de verificación enviado a tu correo electrónico"
+  "requires2FA": true,
+  "message": "C�digo de verificaci�n enviado a tu correo"
 }
 ```
 
-### 3. Verificar 2FA
+### 3. Verificar C�digo 2FA
 
 ```bash
-curl -X POST 'https://localhost:5001/api/Authentication/verify-2fa' \
-  -H 'Content-Type: application/json' \
+curl -X POST https://localhost:5001/api/Authentication/verify-2fa \
+  -H "Content-Type: application/json" \
   -d '{
     "code": "123456",
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
   }'
 ```
 
+**Respuesta exitosa:**
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "refreshToken": "xW3k9pLmN7vQ2rT8yU4jK5sF1hG6dA0zC...",
+  "refreshTokenExpiry": "2024-02-24T10:30:00Z",
+  "user": {
+    "id": "abc123...",
+    "userName": "juan.perez",
+    "email": "juan.perez@example.com"
+  }
+}
+```
+
+### 4. Refresh Token
+
+```bash
+curl -X POST https://localhost:5001/api/Authentication/refresh-token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "xW3k9pLmN7vQ2rT8yU4jK5sF1hG6dA0zC..."
+  }'
+```
+
 **Respuesta:**
 ```json
 {
   "success": true,
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refreshToken": "abc123...",
-  "user": {
-    "id": "b4489164-7071-4446-9765-e1ac185a361d",
-    "email": "usuario@ejemplo.com"
-  },
-  "message": "Verificación exitosa"
+  "refreshToken": "yN2m8qOlP6wR3sU9zV5kL4tG2iH7eB1aC...",
+  "refreshTokenExpiry": "2024-02-24T10:30:00Z"
 }
 ```
 
-### 4. Usar Token en Peticiones Protegidas
+### 5. Logout
 
 ```bash
-curl -X GET 'https://localhost:5001/api/Authentication/audit-logs' \
-  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+curl -X POST https://localhost:5001/api/Authentication/logout \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
-### 5. Refresh Token
+**Respuesta:**
+```json
+{
+  "succeeded": true
+}
+```
+
+### 6. Bloquear IP (Admin)
 
 ```bash
-curl -X POST 'https://localhost:5001/api/Authentication/refresh-token' \
-  -H 'Content-Type: application/json' \
+curl -X POST https://localhost:5001/api/Security/block-ip \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." \
+  -H "Content-Type: application/json" \
   -d '{
-    "refreshToken": "abc123..."
+    "ipAddress": "192.168.1.100",
+    "reason": "Actividad sospechosa detectada",
+    "blackListReason": 2,
+    "expiryDate": "2024-02-20T23:59:59Z",
+    "notes": "M�ltiples intentos de login fallidos"
   }'
 ```
 
----
+### 7. Ver Logs de Auditor�a (Admin)
 
-## 🚀 Comandos Útiles
-
-### Ejecutar la aplicación
 ```bash
-dotnet run --project src\Web
+curl -X GET "https://localhost:5001/api/Authentication/audit-logs?pageNumber=1&pageSize=20&action=LOGIN_SUCCESS" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 ```
 
-### Crear migración
+---
+
+## ?? Seguridad Implementada
+
+### ? Caracter�sticas de Seguridad
+
+1. **Refresh Token con Rotaci�n**
+   - Tokens de 7 d�as de duraci�n
+   - Rotaci�n autom�tica al renovar
+   - M�ximo 5 tokens activos por usuario
+   - Revocaci�n en cascada
+
+2. **Rate Limiting por IP**
+   - M�ximo 5 intentos en 15 minutos
+   - Bloqueo temporal de 60 minutos
+   - Tracking de todos los intentos
+
+3. **Black List de IPs**
+   - Bloqueo manual de IPs sospechosas
+   - Bloqueo autom�tico tras 10 intentos fallidos
+   - Bloqueos temporales o permanentes
+
+4. **Bloqueo de Cuentas**
+   - Bloqueo tras 5 intentos fallidos
+   - Lockout de 15 minutos
+   - Reseteo autom�tico de contadores
+
+5. **Auditor�a Completa**
+   - Todos los eventos registrados
+   - IP y User-Agent capturados
+   - B�squeda por usuario, acci�n, fecha
+
+6. **Background Jobs**
+   - Limpieza autom�tica de tokens expirados
+   - Limpieza de bloqueos expirados
+   - Limpieza de logs antiguos
+
+---
+
+## ?? Notas T�cnicas
+
+### Middleware Order
+
+El orden de los middlewares es **cr�tico**:
+
+```csharp
+app.UseHealthChecks("/health");
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+// ?? DEBE estar ANTES de Authentication
+app.UseMiddleware<IpBlockingMiddleware>();
+
+app.UseAuthentication();
+app.UseAuthorization();
+```
+
+### Migraci�n de Base de Datos
+
 ```bash
-dotnet ef migrations add NombreMigracion --project src\Infrastructure --startup-project src\Web --output-dir Data/Migrations
-```
+# Crear migraci�n
+dotnet ef migrations add AddSecurityFeatures --project src/Infrastructure --startup-project src/Web
 
-### Aplicar migraciones
-```bash
-dotnet ef database update --project src\Infrastructure --startup-project src\Web
-```
-
-### Build sin NSwag (desarrollo)
-```bash
-$env:SkipNSwag="True"; dotnet build
+# Aplicar migraci�n
+dotnet ef database update --project src/Infrastructure --startup-project src/Web
 ```
 
 ---
 
-## 📊 Acciones de Auditoría Registradas
+## ?? Referencias
 
-| Acción | Descripción | Status |
-|--------|-------------|--------|
-| `LOGIN_SUCCESS` | Login completado exitosamente | SUCCESS |
-| `LOGIN_FAILED` | Credenciales inválidas | FAILED |
-| `LOGIN_PENDING_2FA` | Esperando verificación 2FA | PENDING |
-| `LOGIN_2FA_SEND_FAILED` | Error al enviar código 2FA | FAILED |
-| `REGISTER_SUCCESS` | Registro exitoso | SUCCESS |
-| `REGISTER_FAILED` | Error en registro | FAILED |
-| `PASSWORD_RESET_REQUESTED` | Solicitud de reset | SUCCESS |
-| `PASSWORD_RESET_SUCCESS` | Contraseña cambiada | SUCCESS |
-| `PASSWORD_RESET_FAILED` | Error al cambiar contraseña | FAILED |
-| `TOKEN_REFRESH` | Token renovado | SUCCESS |
-| `TOKEN_REVOKE` | Token revocado | SUCCESS |
-| `2FA_ENABLED` | 2FA habilitado | SUCCESS |
-| `2FA_DISABLED` | 2FA deshabilitado | SUCCESS |
+- [ASP.NET Core Identity](https://docs.microsoft.com/en-us/aspnet/core/security/authentication/identity)
+- [JWT Bearer Authentication](https://docs.microsoft.com/en-us/aspnet/core/security/authentication/jwt-bearer)
+- [Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+- [CQRS Pattern](https://docs.microsoft.com/en-us/azure/architecture/patterns/cqrs)
+- [MediatR](https://github.com/jbogard/MediatR)
 
 ---
 
-## 👤 Usuario de Prueba (Seed)
-
-Al iniciar la aplicación en desarrollo, se crea automáticamente:
-
-| Campo | Valor |
-|-------|-------|
-| Email | `administrator@localhost` |
-| Password | `Administrator1!` |
-| Rol | `Administrator` |
-
----
-
-## 📁 Estructura de Archivos
-
-```
-src/
-├── Application/
-│   ├── Common/
-│   │   ├── Interfaces/
-│   │   │   ├── IAuditLogService.cs
-│   │   │   ├── IAuthenticationOperations.cs
-│   │   │   ├── IEmailService.cs
-│   │   │   ├── IIdentityService.cs
-│   │   │   ├── IJwtTokenGenerator.cs
-│   │   │   ├── IRefreshTokenService.cs
-│   │   │   └── ITwoFactorService.cs
-│   │   └── Models/
-│   │       └── AuditLogDto.cs
-│   └── Users/
-│       ├── Commands/
-│       │   ├── EnableTwoFactor/
-│       │   ├── ForgotPassword/
-│       │   ├── Login/
-│       │   ├── RefreshToken/
-│       │   ├── Register/
-│       │   ├── ResetPassword/
-│       │   ├── RevokeToken/
-│       │   └── ValidateTwoFactor/
-│       └── Queries/
-│           └── GetAuditLogsQuery.cs
-├── Domain/
-│   ├── Entities/
-│   │   ├── AuditLog.cs
-│   │   ├── Permission.cs
-│   │   ├── RefreshToken.cs
-│   │   └── RolePermission.cs
-│   └── Enums/
-│       └── AuthEnums.cs
-├── Infrastructure/
-│   ├── Data/
-│   │   ├── ApplicationDbContext.cs
-│   │   ├── ApplicationDbContextInitialiser.cs
-│   │   ├── Configurations/
-│   │   └── Migrations/
-│   ├── Identity/
-│   │   ├── ApplicationUser.cs
-│   │   └── IdentityService.cs
-│   └── Services/
-│       ├── AuditLogService.cs
-│       ├── AuthenticationOperations.cs
-│       ├── BrevoEmailService.cs
-│       ├── JwtTokenGenerator.cs
-│       ├── RefreshTokenService.cs
-│       └── TwoFactorService.cs
-└── Web/
-    ├── Endpoints/
-    │   └── Authentication.cs
-    ├── Services/
-    │   └── CurrentUser.cs
-    ├── Program.cs
-    └── appsettings.json
-```
-
----
-
-## ✅ Checklist de Seguridad
-
-- [x] Contraseñas hasheadas con ASP.NET Core Identity
-- [x] JWT con expiración configurable
-- [x] Refresh tokens con rotación automática
-- [x] 2FA por email obligatorio en login
-- [x] Código 2FA con expiración (10 minutos por defecto)
-- [x] Auditoría de todas las acciones de autenticación
-- [x] Registro de IP y User-Agent en logs
-- [x] Variables sensibles en archivo .env (no en código)
-- [x] Validación de entrada con FluentValidation
-- [x] Políticas de contraseña fuertes
-
----
-
-## 📞 Soporte
-
-Para reportar problemas o sugerencias, crear un issue en el repositorio:
-[https://github.com/JonathanArroyaveGonzalez/SistemaFinancieroUcaldas_Backend](https://github.com/JonathanArroyaveGonzalez/SistemaFinancieroUcaldas_Backend)
+**�ltima actualizaci�n:** 17/02/2024  
+**Versi�n:** 2.0.0
