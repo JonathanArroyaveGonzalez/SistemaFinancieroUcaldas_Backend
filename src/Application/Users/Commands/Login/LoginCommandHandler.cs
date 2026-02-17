@@ -1,5 +1,6 @@
 using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
+using SAPFIAI.Domain.Enums;
 using MediatR;
 
 namespace SAPFIAI.Application.Users.Commands.Login;
@@ -11,35 +12,109 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
     private readonly IAuditLogService _auditLogService;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly IIdentityService _identityService;
+    private readonly IIpBlackListService _ipBlackListService;
+    private readonly ILoginAttemptService _loginAttemptService;
+    private readonly IAccountLockService _accountLockService;
+    private readonly IRefreshTokenService _refreshTokenService;
 
     public LoginCommandHandler(
         IAuthenticationOperations authOperations,
         ITwoFactorService twoFactorService,
         IAuditLogService auditLogService,
         IJwtTokenGenerator jwtTokenGenerator,
-        IIdentityService identityService)
+        IIdentityService identityService,
+        IIpBlackListService ipBlackListService,
+        ILoginAttemptService loginAttemptService,
+        IAccountLockService accountLockService,
+        IRefreshTokenService refreshTokenService)
     {
         _authOperations = authOperations;
         _twoFactorService = twoFactorService;
         _auditLogService = auditLogService;
         _jwtTokenGenerator = jwtTokenGenerator;
         _identityService = identityService;
+        _ipBlackListService = ipBlackListService;
+        _loginAttemptService = loginAttemptService;
+        _accountLockService = accountLockService;
+        _refreshTokenService = refreshTokenService;
     }
 
     public async Task<LoginResponse> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        // Verificar credenciales
+        var ipAddress = request.IpAddress ?? "UNKNOWN";
+
+        // 1. Verificar si la IP está bloqueada
+        var isIpBlocked = await _ipBlackListService.IsIpBlockedAsync(ipAddress);
+        if (isIpBlocked)
+        {
+            await _loginAttemptService.RecordAttemptAsync(
+                request.Email,
+                ipAddress,
+                false,
+                "IP bloqueada",
+                LoginFailureReason.IpBlocked,
+                request.UserAgent);
+
+            return new LoginResponse
+            {
+                Success = false,
+                Message = "Acceso denegado. Tu IP ha sido bloqueada.",
+                Errors = new[] { "IP bloqueada por razones de seguridad" }
+            };
+        }
+
+        // 2. Verificar rate limiting por IP
+        var recentAttemptsByIp = await _loginAttemptService.GetRecentAttemptsByIpAsync(ipAddress, 15);
+        if (recentAttemptsByIp >= 5)
+        {
+            await _loginAttemptService.RecordAttemptAsync(
+                request.Email,
+                ipAddress,
+                false,
+                "Demasiados intentos desde esta IP",
+                LoginFailureReason.IpBlocked,
+                request.UserAgent);
+
+            return new LoginResponse
+            {
+                Success = false,
+                Message = "Demasiados intentos de login. Intenta de nuevo en 15 minutos.",
+                Errors = new[] { "Rate limit excedido" }
+            };
+        }
+
+        // 3. Verificar credenciales
         var (isValid, userId, email) = await _authOperations.VerifyCredentialsAsync(request.Email, request.Password);
 
         if (!isValid || userId == null || email == null)
         {
+            // Registrar intento fallido
+            await _loginAttemptService.RecordAttemptAsync(
+                request.Email,
+                ipAddress,
+                false,
+                "Credenciales inválidas",
+                LoginFailureReason.InvalidCredentials,
+                request.UserAgent);
+
             await _auditLogService.LogActionAsync(
                 userId: request.Email,
                 action: "LOGIN_FAILED",
-                ipAddress: request.IpAddress ?? "UNKNOWN",
+                ipAddress: ipAddress,
                 userAgent: request.UserAgent,
                 details: "Credenciales inválidas",
                 status: "FAILED");
+
+            // Verificar si se debe bloquear la IP
+            if (await _loginAttemptService.ShouldBlockIpAsync(ipAddress))
+            {
+                await _ipBlackListService.BlockIpAsync(
+                    ipAddress,
+                    "Bloqueado automáticamente por demasiados intentos fallidos",
+                    BlackListReason.TooManyAttempts,
+                    "SYSTEM",
+                    DateTime.UtcNow.AddHours(24));
+            }
 
             return new LoginResponse
             {
@@ -49,7 +124,31 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             };
         }
 
-        // Obtener usuario y roles
+        // 4. Verificar si la cuenta está bloqueada
+        var (isLocked, lockoutEnd, failedAttempts) = await _accountLockService.GetAccountLockStatusAsync(userId);
+        if (isLocked)
+        {
+            await _loginAttemptService.RecordAttemptAsync(
+                request.Email,
+                ipAddress,
+                false,
+                "Cuenta bloqueada",
+                LoginFailureReason.AccountLocked,
+                request.UserAgent);
+
+            var minutesRemaining = lockoutEnd.HasValue
+                ? (int)(lockoutEnd.Value - DateTime.UtcNow).TotalMinutes
+                : 0;
+
+            return new LoginResponse
+            {
+                Success = false,
+                Message = $"Tu cuenta ha sido bloqueada temporalmente. Intenta nuevamente en {minutesRemaining} minutos.",
+                Errors = new[] { "Cuenta bloqueada por intentos fallidos" }
+            };
+        }
+
+        // 5. Obtener usuario y roles
         var user = await _authOperations.GetUserByIdAsync(userId);
         if (user == null)
         {
@@ -63,7 +162,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
 
         var userRoles = await _identityService.GetUserRolesAsync(userId);
 
-        // Verificar si el usuario tiene 2FA habilitado
+        // 6. Verificar si el usuario tiene 2FA habilitado
         var has2FA = await _twoFactorService.IsTwoFactorEnabledAsync(userId);
 
         if (has2FA)
@@ -78,7 +177,7 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
                 await _auditLogService.LogActionAsync(
                     userId: userId,
                     action: "LOGIN_2FA_SEND_FAILED",
-                    ipAddress: request.IpAddress ?? "UNKNOWN",
+                    ipAddress: ipAddress,
                     userAgent: request.UserAgent,
                     details: "Error al enviar código 2FA",
                     status: "FAILED");
@@ -91,10 +190,18 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
                 };
             }
 
+            await _loginAttemptService.RecordAttemptAsync(
+                request.Email,
+                ipAddress,
+                true,
+                "Pendiente verificación 2FA",
+                null,
+                request.UserAgent);
+
             await _auditLogService.LogActionAsync(
                 userId: userId,
                 action: "LOGIN_PENDING_2FA",
-                ipAddress: request.IpAddress ?? "UNKNOWN",
+                ipAddress: ipAddress,
                 userAgent: request.UserAgent,
                 details: "Código 2FA enviado, pendiente verificación",
                 status: "PENDING");
@@ -109,15 +216,29 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
             };
         }
 
-        // Flujo sin 2FA: login directo con token final
+        // 7. Flujo sin 2FA: login directo con token final + refresh token
         var token = _jwtTokenGenerator.GenerateToken(userId, email, userRoles, requiresTwoFactorVerification: false);
+        var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(userId, ipAddress);
 
-        await _authOperations.UpdateLastLoginAsync(userId, request.IpAddress);
+        // 8. Resetear contadores de intentos fallidos
+        await _accountLockService.ResetFailedAttemptsAsync(userId);
+
+        // 9. Actualizar último login
+        await _authOperations.UpdateLastLoginAsync(userId, ipAddress);
+
+        // 10. Registrar intento exitoso
+        await _loginAttemptService.RecordAttemptAsync(
+            request.Email,
+            ipAddress,
+            true,
+            null,
+            null,
+            request.UserAgent);
 
         await _auditLogService.LogActionAsync(
             userId: userId,
             action: "LOGIN_SUCCESS",
-            ipAddress: request.IpAddress ?? "UNKNOWN",
+            ipAddress: ipAddress,
             userAgent: request.UserAgent,
             details: "Login completado sin 2FA",
             status: "SUCCESS");
@@ -126,6 +247,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, LoginResponse>
         {
             Success = true,
             Token = token,
+            RefreshToken = refreshToken.Token,
+            RefreshTokenExpiry = refreshToken.ExpiryDate,
             User = user,
             Requires2FA = false,
             Message = "Login exitoso"

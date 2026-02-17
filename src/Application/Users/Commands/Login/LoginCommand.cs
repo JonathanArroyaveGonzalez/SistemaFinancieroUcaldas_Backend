@@ -23,6 +23,10 @@ public class LoginResponse
 
     public string? Token { get; set; }
 
+    public string? RefreshToken { get; set; }
+
+    public DateTime? RefreshTokenExpiry { get; set; }
+
     public UserDto? User { get; set; }
 
     public string? Message { get; set; }
