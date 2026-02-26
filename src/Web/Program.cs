@@ -21,7 +21,7 @@ foreach (var envPath in possibleEnvPaths)
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith("#"))
                 continue;
 
-            var parts = line.Split('=', 2, StringSplitOptions.RemoveEmptyEntries);
+            var parts = line.Split('=', 2);
             if (parts.Length == 2)
             {
                 var key = parts[0].Trim();
@@ -42,6 +42,9 @@ builder.Configuration.AddEnvironmentVariables();
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddWebServices();
+
+// Add global exception handling (RFC 7807)
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
@@ -68,6 +71,11 @@ app.UseHealthChecks("/health");
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors("DevelopmentCors");
+}
+
 // Middleware de seguridad - debe estar ANTES de Authentication
 app.UseMiddleware<IpBlockingMiddleware>();
 
@@ -88,7 +96,7 @@ app.MapRazorPages();
 
 app.MapFallbackToFile("index.html");
 
-app.UseExceptionHandler(options => { });
+app.UseExceptionHandler();
 
 app.Map("/", () => Results.Redirect("/api"));
 

@@ -63,6 +63,14 @@ public static class DependencyInjection
             configure.OperationProcessors.Add(new AspNetCoreOperationSecurityScopeProcessor("JWT"));
         });
 
+        services.AddCors(options =>
+        {
+            options.AddPolicy("DevelopmentCors", policy =>
+                policy.AllowAnyOrigin()
+                      .AllowAnyHeader()
+                      .AllowAnyMethod());
+        });
+
 
         return services;
     }

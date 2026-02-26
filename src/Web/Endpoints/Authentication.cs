@@ -1,4 +1,4 @@
-using SAPFIAI.Application.Common.Interfaces;
+ï»¿using SAPFIAI.Application.Common.Interfaces;
 using SAPFIAI.Application.Common.Models;
 using SAPFIAI.Application.Users.Commands.EnableTwoFactor;
 using SAPFIAI.Application.Users.Commands.ForgotPassword;
@@ -12,6 +12,7 @@ using SAPFIAI.Application.Users.Commands.ValidateTwoFactor;
 using SAPFIAI.Application.Users.Queries;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using SAPFIAI.Web.Infrastructure;
 
 namespace SAPFIAI.Web.Endpoints;
 
@@ -23,7 +24,7 @@ public class Authentication : EndpointGroupBase
             .WithName("Authentication")
             .WithOpenApi();
 
-        // Endpoints públicos (sin autenticación)
+        // Endpoints pï¿½blicos (sin autenticaciï¿½n)
         group.MapPost("/register", Register)
             .WithName("Register")
             .WithOpenApi()
@@ -62,7 +63,7 @@ public class Authentication : EndpointGroupBase
             .Produces<LoginResponse>(StatusCodes.Status200OK)
             .AllowAnonymous();
 
-        // Endpoints protegidos (requieren autenticación)
+        // Endpoints protegidos (requieren autenticaciï¿½n)
         group.MapPost("/logout", Logout)
             .WithName("Logout")
             .WithOpenApi()
@@ -253,3 +254,4 @@ public class Authentication : EndpointGroupBase
         return await mediator.Send(query);
     }
 }
+

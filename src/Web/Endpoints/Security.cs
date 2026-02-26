@@ -1,4 +1,4 @@
-using SAPFIAI.Application.Common.Models;
+﻿using SAPFIAI.Application.Common.Models;
 using SAPFIAI.Application.Security.Commands.BlockIp;
 using SAPFIAI.Application.Security.Commands.UnblockIp;
 using SAPFIAI.Application.Security.Commands.UnlockAccount;
@@ -6,6 +6,7 @@ using SAPFIAI.Application.Security.Queries.GetBlockedIps;
 using SAPFIAI.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using SAPFIAI.Web.Infrastructure;
 
 namespace SAPFIAI.Web.Endpoints;
 
@@ -68,3 +69,4 @@ public class Security : EndpointGroupBase
         return await mediator.Send(command);
     }
 }
+
