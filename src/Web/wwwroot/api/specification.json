@@ -771,14 +771,26 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "succeeded": {
+          "isSuccess": {
             "type": "boolean"
           },
-          "errors": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
+          "isFailure": {
+            "type": "boolean"
+          },
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
           }
         }
       },
@@ -927,15 +939,15 @@
                 "type": "string",
                 "nullable": true
               },
-              "isActive": {
-                "type": "boolean"
-              },
               "notes": {
                 "type": "string",
                 "nullable": true
               },
               "blackListReason": {
                 "$ref": "#/components/schemas/BlackListReason"
+              },
+              "isActive": {
+                "type": "boolean"
               }
             }
           }
