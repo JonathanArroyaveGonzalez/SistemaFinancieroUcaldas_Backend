@@ -34,19 +34,17 @@ public class AuditLogService : IAuditLogService
     {
         try
         {
-            var auditLog = new AuditLog
-            {
-                UserId = userId,
-                Action = action,
-                IpAddress = ipAddress,
-                UserAgent = userAgent,
-                Details = details,
-                Timestamp = DateTime.UtcNow,
-                Status = status,
-                ErrorMessage = errorMessage,
-                ResourceId = resourceId,
-                ResourceType = resourceType
-            };
+            var auditLog = AuditLog.Create(
+                userId,
+                action,
+                ipAddress,
+                userAgent,
+                details,
+                status,
+                errorMessage,
+                resourceId,
+                resourceType
+            );
 
             _dbContext.Set<AuditLog>().Add(auditLog);
             var saved = await _dbContext.SaveChangesAsync();

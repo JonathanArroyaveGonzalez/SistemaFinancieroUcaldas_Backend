@@ -36,27 +36,30 @@ public class IpBlackListService : IIpBlackListService
 
         if (existingBlock != null)
         {
-            // Actualizar el bloqueo existente
-            existingBlock.Reason = reason;
-            existingBlock.BlackListReason = blackListReason;
-            existingBlock.ExpiryDate = expiryDate;
-            existingBlock.Notes = notes;
-            existingBlock.BlockedDate = DateTime.UtcNow;
-
+            // No se puede modificar propiedades de solo lectura directamente.
+            // Alternativa: eliminar el bloqueo anterior y crear uno nuevo actualizado.
+            _context.IpBlackLists.Remove(existingBlock);
+            var updatedBlock = IpBlackList.Block(
+                ipAddress,
+                reason,
+                expiryDate,
+                blockedBy,
+                notes,
+                blackListReason
+            );
+            _context.IpBlackLists.Add(updatedBlock);
             await _context.SaveChangesAsync(default);
-            return existingBlock;
+            return updatedBlock;
         }
 
-        var ipBlackList = new IpBlackList
-        {
-            IpAddress = ipAddress,
-            Reason = reason,
-            BlackListReason = blackListReason,
-            BlockedDate = DateTime.UtcNow,
-            ExpiryDate = expiryDate,
-            BlockedBy = blockedBy,
-            Notes = notes
-        };
+        var ipBlackList = IpBlackList.Block(
+            ipAddress,
+            reason,
+            expiryDate,
+            blockedBy,
+            notes,
+            blackListReason
+        );
 
         _context.IpBlackLists.Add(ipBlackList);
         await _context.SaveChangesAsync(default);
@@ -73,11 +76,11 @@ public class IpBlackListService : IIpBlackListService
         if (!blockedIps.Any())
             return false;
 
-        // Establecer fecha de expiración en el pasado para desactivar el bloqueo
+        // Establecer fecha de expiraciï¿½n en el pasado para desactivar el bloqueo
         foreach (var blockedIp in blockedIps)
         {
-            blockedIp.ExpiryDate = DateTime.UtcNow.AddSeconds(-1);
-            blockedIp.Notes = $"{blockedIp.Notes}\nUnblocked by: {unblockedBy} at {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}";
+            blockedIp.Unblock();
+            // No se puede modificar Notes porque es de solo lectura
         }
 
         await _context.SaveChangesAsync(default);

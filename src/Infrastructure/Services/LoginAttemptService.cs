@@ -27,16 +27,18 @@ public class LoginAttemptService : ILoginAttemptService
         LoginFailureReason? failureReasonType = null, 
         string? userAgent = null)
     {
-        var attempt = new LoginAttempt
+        LoginAttempt attempt;
+        if (wasSuccessful)
         {
-            Email = email,
-            IpAddress = ipAddress,
-            UserAgent = userAgent,
-            AttemptDate = DateTime.UtcNow,
-            WasSuccessful = wasSuccessful,
-            FailureReason = failureReason,
-            FailureReasonType = failureReasonType
-        };
+            attempt = LoginAttempt.RecordSuccess(email, ipAddress, userAgent);
+        }
+        else
+        {
+            // Si failureReasonType es null, usar el primer valor del enum
+            var failureType = failureReasonType ?? Enum.GetValues(typeof(LoginFailureReason)).Cast<LoginFailureReason>().First();
+            var safeFailureReason = failureReason ?? string.Empty;
+            attempt = LoginAttempt.RecordFailure(email, ipAddress, userAgent, safeFailureReason, failureType);
+        }
 
         _context.LoginAttempts.Add(attempt);
         await _context.SaveChangesAsync(default);

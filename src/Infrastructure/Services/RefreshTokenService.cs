@@ -27,7 +27,7 @@ public class RefreshTokenService : IRefreshTokenService
         var expirationDays = _configuration.GetValue<int>("Security:RefreshToken:ExpirationDays", 7);
         var maxActiveTokens = _configuration.GetValue<int>("Security:RefreshToken:MaxActiveTokensPerUser", 5);
 
-        // Revocar tokens antiguos si se excede el límite
+        // Revocar tokens antiguos si se excede el lï¿½mite
         var activeTokens = await GetActiveTokensByUserAsync(userId);
         if (activeTokens.Count() >= maxActiveTokens)
         {
@@ -35,15 +35,12 @@ public class RefreshTokenService : IRefreshTokenService
             await RevokeRefreshTokenAsync(oldestToken.Token, ipAddress, "Exceeded maximum active tokens");
         }
 
-        var refreshToken = new RefreshToken
-        {
-            Token = GenerateSecureToken(),
-            UserId = userId,
-            ExpiryDate = DateTime.UtcNow.AddDays(expirationDays),
-            CreatedDate = DateTime.UtcNow,
-            CreatedByIp = ipAddress,
-            IsRevoked = false
-        };
+        var refreshToken = RefreshToken.Create(
+            GenerateSecureToken(),
+            userId,
+            TimeSpan.FromDays(expirationDays),
+            ipAddress
+        );
 
         _context.RefreshTokens.Add(refreshToken);
         await _context.SaveChangesAsync(default);
@@ -81,10 +78,7 @@ public class RefreshTokenService : IRefreshTokenService
         if (refreshToken == null || refreshToken.IsRevoked)
             return false;
 
-        refreshToken.IsRevoked = true;
-        refreshToken.RevokedDate = DateTime.UtcNow;
-        refreshToken.RevokedByIp = ipAddress;
-        refreshToken.ReasonRevoked = reason;
+        refreshToken.Revoke(ipAddress, reason, null); // Assuming Revoke method handles the properties
 
         await _context.SaveChangesAsync(default);
 
@@ -99,10 +93,7 @@ public class RefreshTokenService : IRefreshTokenService
 
         foreach (var token in activeTokens)
         {
-            token.IsRevoked = true;
-            token.RevokedDate = DateTime.UtcNow;
-            token.RevokedByIp = ipAddress;
-            token.ReasonRevoked = reason;
+            token.Revoke(ipAddress, reason, null); // Assuming Revoke method handles the properties
         }
 
         await _context.SaveChangesAsync(default);

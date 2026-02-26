@@ -103,7 +103,7 @@ public class IdentityService : IIdentityService
         var user = await _userManager.FindByEmailAsync(email);
         if (user == null)
         {
-            return Result.Failure(new[] { "Usuario no encontrado" });
+            return Result.Failure(new Error("UserNotFound", "Usuario no encontrado"));
         }
 
         var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
@@ -115,7 +115,7 @@ public class IdentityService : IIdentityService
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
         {
-            return Result.Failure(new[] { "Usuario no encontrado" });
+            return Result.Failure(new Error("UserNotFound", "Usuario no encontrado"));
         }
 
         var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
@@ -127,7 +127,7 @@ public class IdentityService : IIdentityService
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
         {
-            return Result.Failure(new[] { "Usuario no encontrado" });
+            return Result.Failure(new Error("UserNotFound", "Usuario no encontrado"));
         }
 
         var result = await _userManager.AddToRoleAsync(user, role);
@@ -139,7 +139,7 @@ public class IdentityService : IIdentityService
         var user = await _userManager.FindByIdAsync(userId);
         if (user == null)
         {
-            return Result.Failure(new[] { "Usuario no encontrado" });
+            return Result.Failure(new Error("UserNotFound", "Usuario no encontrado"));
         }
 
         var result = await _userManager.RemoveFromRoleAsync(user, role);
