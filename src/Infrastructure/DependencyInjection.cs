@@ -5,8 +5,10 @@ using SAPFIAI.Infrastructure.Data.Interceptors;
 using SAPFIAI.Infrastructure.Identity;
 using SAPFIAI.Infrastructure.Services;
 using SAPFIAI.Infrastructure.BackgroundJobs;
+using SAPFIAI.Infrastructure.Authorization;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -84,12 +86,19 @@ public static class DependencyInjection
         services.AddScoped<IIpBlackListService, IpBlackListService>();
         services.AddScoped<ILoginAttemptService, LoginAttemptService>();
         services.AddScoped<IAccountLockService, AccountLockService>();
+        services.AddScoped<IPermissionService, PermissionService>();
+        services.AddScoped<IRoleService, RoleService>();
 
         // Registrar Background Jobs
         services.AddHostedService<SecurityCleanupJob>();
 
         services.AddAuthorization(options =>
-            options.AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator)));
+        {
+            options.AddPolicy(Policies.CanPurge, policy => policy.RequireRole(Roles.Administrator));
+            options.AddPolicy(Policies.RequireAdministrator, policy => policy.RequireRole(Roles.Administrator));
+        });
+
+        services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
         return services;
     }
