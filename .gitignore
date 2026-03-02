@@ -508,4 +508,17 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
+# Template packaging output
+template-output/
+*.nupkg
+*.snupkg
 
+.template.config/
+
+docs/
+docsPublish/
+
+#Scripts de publicacion PowerShell
+publish-template.ps1
+publish-template.sh
+    
