@@ -34,12 +34,42 @@ public class EnableTwoFactorCommandHandler : IRequestHandler<EnableTwoFactorComm
 
         try
         {
+            // Verificar contraseña
+            var isPasswordValid = await _identityService.CheckPasswordAsync(userId, request.Password);
+            if (!isPasswordValid)
+            {
+                await _auditLogService.LogActionAsync(
+                    userId: userId,
+                    action: "ENABLE_2FA",
+                    ipAddress: "UNKNOWN",
+                    userAgent: "UNKNOWN",
+                    details: "Contraseña incorrecta",
+                    status: "ERROR");
+                    
+                return Result.Failure(Error.Failure("User.InvalidPassword", "Contraseña incorrecta"));
+            }
+
+            var result = await _identityService.SetTwoFactorEnabledAsync(userId, request.Enable);
+            
+            if (!result.Succeeded)
+            {
+                await _auditLogService.LogActionAsync(
+                    userId: userId,
+                    action: "ENABLE_2FA",
+                    ipAddress: "UNKNOWN",
+                    userAgent: "UNKNOWN",
+                    details: $"Error al {(request.Enable ? "habilitar" : "deshabilitar")} 2FA",
+                    status: "ERROR");
+                    
+                return result;
+            }
+
             await _auditLogService.LogActionAsync(
                 userId: userId,
                 action: "ENABLE_2FA",
                 ipAddress: "UNKNOWN",
                 userAgent: "UNKNOWN",
-                details: "2FA habilitado exitosamente",
+                details: $"2FA {(request.Enable ? "habilitado" : "deshabilitado")} exitosamente",
                 status: "SUCCESS");
 
             return Result.Success();

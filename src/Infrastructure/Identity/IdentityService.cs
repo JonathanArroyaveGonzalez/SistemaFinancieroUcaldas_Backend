@@ -145,4 +145,28 @@ public class IdentityService : IIdentityService
         var result = await _userManager.RemoveFromRoleAsync(user, role);
         return result.ToApplicationResult();
     }
+
+    public async Task<Result> SetTwoFactorEnabledAsync(string userId, bool enabled)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return Result.Failure(new Error("UserNotFound", "Usuario no encontrado"));
+        }
+
+        user.IsTwoFactorEnabled = enabled;
+        var result = await _userManager.UpdateAsync(user);
+        return result.ToApplicationResult();
+    }
+
+    public async Task<bool> CheckPasswordAsync(string userId, string password)
+    {
+        var user = await _userManager.FindByIdAsync(userId);
+        if (user == null)
+        {
+            return false;
+        }
+
+        return await _userManager.CheckPasswordAsync(user, password);
+    }
 }

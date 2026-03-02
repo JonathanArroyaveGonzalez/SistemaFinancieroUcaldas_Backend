@@ -25,4 +25,8 @@ public interface IIdentityService
     Task<Result> AssignRoleAsync(string userId, string role);
 
     Task<Result> RemoveRoleAsync(string userId, string role);
+
+    Task<Result> SetTwoFactorEnabledAsync(string userId, bool enabled);
+
+    Task<bool> CheckPasswordAsync(string userId, string password);
 }
