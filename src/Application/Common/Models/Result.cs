@@ -22,7 +22,11 @@ public class Result
 
     public bool IsFailure => !IsSuccess;
 
+    public bool Succeeded => IsSuccess;
+
     public Error Error { get; }
+
+    public Error[] Errors => IsFailure ? new[] { Error } : Array.Empty<Error>();
 
     public static Result Success() => new(true, Error.None);
 
@@ -46,4 +50,6 @@ public class Result<TValue> : Result
     public TValue Value => IsSuccess
         ? _value!
         : throw new InvalidOperationException("The value of a failure result can not be accessed.");
+
+    public TValue Data => Value;
 }
